@@ -9,6 +9,7 @@ import os
 import asyncio
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
+import sys
 import structlog
 from mcp.server.fastmcp import FastMCP, Context
 from fastmcp.exceptions import ToolError
@@ -41,13 +42,13 @@ from .tools.updates import (
 # Load environment variables from .env file
 load_dotenv()
 
-# Configure structured logging
+# Configure structured logging to use stderr
 structlog.configure(
     processors=[
         structlog.dev.ConsoleRenderer()
     ],
     wrapper_class=structlog.make_filtering_bound_logger(20),  # INFO level
-    logger_factory=structlog.PrintLoggerFactory(),
+    logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),  # Send to stderr
     cache_logger_on_first_use=True,
 )
 
