@@ -4,6 +4,22 @@ version = "1.0.0"
 description = "Augments MCP Server - A comprehensive framework documentation provider for Claude Code"
 readme = "README.md"
 requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "augmnt"}
+]
+keywords = ["mcp", "claude", "documentation", "framework", "ai", "development-tools"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Documentation",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+urls = {Homepage = "https://augments.dev", Repository = "https://github.com/augmnt/augments-mcp-server", Issues = "https://github.com/augmnt/augments-mcp-server/issues"}
 dependencies = [
     "fastmcp>=0.1.0",
     "httpx>=0.25.0",
