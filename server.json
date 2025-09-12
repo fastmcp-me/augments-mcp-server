@@ -1,0 +1,31 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.augmnt/augments-mcp-server",
+  "description": "Augments MCP Server - A comprehensive framework documentation provider for Claude Code",
+  "status": "active",
+  "repository": {
+    "url": "https://github.com/augmnt/augments-mcp-server",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "packages": [
+    {
+      "registry_type": "pypi",
+      "registry_base_url": "https://pypi.org",
+      "identifier": "augments-mcp-server",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environment_variables": [
+        {
+          "description": "Your API key for the service",
+          "is_required": true,
+          "format": "string",
+          "is_secret": true,
+          "name": "YOUR_API_KEY"
+        }
+      ]
+    }
+  ]
+}
