@@ -1,6 +1,6 @@
 [project]
 name = "augments-mcp-server"
-version = "1.0.0"
+version = "1.0.1"
 description = "Augments MCP Server - A comprehensive framework documentation provider for Claude Code"
 readme = "README.md"
 requires-python = ">=3.11"
