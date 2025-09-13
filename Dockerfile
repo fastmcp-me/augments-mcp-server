@@ -56,5 +56,5 @@ ENV PYTHONUNBUFFERED=1 \
 # Expose port (Railway uses $PORT env var)
 EXPOSE 8080
 
-# Start the MCP server (Railway startCommand will override this)
-CMD ["python", "-m", "augments_mcp.web_server"]
+# Start the MCP-compliant server (Railway startCommand will override this)
+CMD ["python", "-m", "augments_mcp.mcp_web_server"]
