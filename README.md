@@ -142,13 +142,13 @@ LOG_LEVEL=INFO
 
 ### **Option 1: Hosted MCP Server (Recommended)**
 
-For the easiest setup, connect directly to our hosted MCP server at `mcp.augments.dev`. No installation required!
+For the easiest setup, connect directly to our hosted MCP server at `https://mcp.augments.dev/mcp`. No installation required!
 
 #### **Using Claude Code CLI**
 
 ```bash
 # Add the hosted MCP server
-claude mcp add augments http://mcp.augments.dev
+claude mcp add --transport http augments https://mcp.augments.dev/mcp
 
 # Verify the server is configured
 claude mcp list
@@ -157,7 +157,22 @@ claude mcp list
 claude mcp get augments
 ```
 
-#### **Manual Configuration**
+#### **Using Cursor**
+
+Add to your Cursor MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "augments": {
+      "transport": "http",
+      "url": "https://mcp.augments.dev/mcp"
+    }
+  }
+}
+```
+
+#### **Manual Configuration (Claude Desktop)**
 
 Add to your Claude Desktop MCP configuration file:
 
@@ -170,7 +185,10 @@ Add to your Claude Desktop MCP configuration file:
 {
   "mcpServers": {
     "augments": {
-      "url": "http://mcp.augments.dev"
+      "transport": {
+        "type": "streamable-http",
+        "url": "https://mcp.augments.dev/mcp"
+      }
     }
   }
 }
@@ -209,6 +227,8 @@ The hosted server provides:
 - ✅ **High availability** - Reliable uptime with smart caching
 - ✅ **No authentication** - Completely frictionless access
 - ✅ **Rate limiting protection** - Intelligent abuse prevention
+- ✅ **MCP Protocol Compliant** - Uses official MCP Python SDK with streamable-http transport
+- ✅ **Multi-Client Support** - Compatible with Claude Code, Cursor, and other MCP clients
 
 ### **Option 2: Local Installation**
 
@@ -281,7 +301,7 @@ claude mcp remove augments
 
 # Update server configuration (remove and re-add)
 claude mcp remove augments
-claude mcp add augments http://mcp.augments.dev
+claude mcp add --transport http augments https://mcp.augments.dev/mcp
 ```
 
 #### **Troubleshooting**
@@ -630,13 +650,21 @@ LOG_LEVEL=DEBUG uv run augments-mcp-server
 ## 🏛️ Technical Details
 
 ### **Core Technologies**
-- **FastMCP**: Official MCP Python SDK
+- **FastMCP**: Official MCP Python SDK with streamable-http transport
 - **Pydantic**: Data validation and serialization  
 - **httpx**: Async HTTP client for API requests
 - **BeautifulSoup4**: HTML parsing for web scraping
 - **diskcache**: Persistent caching with TTL support
 - **structlog**: Structured logging for observability
 - **watchdog**: File system monitoring for hot-reload
+
+### **MCP Protocol Implementation**
+- **Transport**: Streamable-HTTP (official MCP specification)
+- **Endpoint**: `/mcp` (automatically mounted by FastMCP)
+- **Protocol Version**: MCP 2024-11-05 specification
+- **Client Compatibility**: Claude Code, Cursor, and all MCP-compliant clients
+- **Message Format**: JSON-RPC over HTTP with streaming support
+- **Security**: HTTPS/TLS encryption for hosted deployment
 
 ### **Design Principles**
 - **Async-First**: All I/O operations use async/await
