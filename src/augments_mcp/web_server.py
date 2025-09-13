@@ -227,8 +227,12 @@ async def lifespan(app: FastAPI):
         abuse_detector = AbuseDetector(redis_client)
         request_coalescer = RequestCoalescer(ttl=10)
         
-        # Store redis_client for middleware use
+        # Store components in app state for endpoint access
         app.state.redis_client = redis_client
+        app.state.registry_manager = registry_manager
+        app.state.doc_cache = doc_cache
+        app.state.github_provider = github_provider
+        app.state.website_provider = website_provider
         
         logger.info("All components initialized successfully - v2")
         
@@ -419,7 +423,7 @@ async def list_frameworks(
     """List available frameworks"""
     try:
         frameworks = await framework_discovery.list_frameworks_impl(
-            registry=registry_manager,
+            registry=request.app.state.registry_manager,
             category=category
         )
         
@@ -444,7 +448,7 @@ async def get_framework_info(
     """Get detailed framework information"""
     try:
         info = await framework_discovery.get_framework_info_impl(
-            registry=registry_manager,
+            registry=request.app.state.registry_manager,
             framework=framework
         )
         
@@ -468,7 +472,7 @@ async def search_frameworks(
     """Search frameworks"""
     try:
         results = await framework_discovery.search_frameworks_impl(
-            registry=registry_manager,
+            registry=request.app.state.registry_manager,
             query=search_req.query
         )
         
@@ -498,10 +502,10 @@ async def get_documentation(
             pass
         
         docs = await documentation.get_framework_docs_impl(
-            registry=registry_manager,
-            cache=doc_cache,
-            github_provider=github_provider,
-            website_provider=website_provider,
+            registry=request.app.state.registry_manager,
+            cache=request.app.state.doc_cache,
+            github_provider=request.app.state.github_provider,
+            website_provider=request.app.state.website_provider,
             framework=doc_req.framework,
             section=doc_req.section,
             use_cache=doc_req.use_cache
@@ -559,10 +563,10 @@ async def get_framework_context(
     """Get multi-framework context"""
     try:
         context = await context_enhancement.get_framework_context_impl(
-            registry=registry_manager,
-            cache=doc_cache,
-            github_provider=github_provider,
-            website_provider=website_provider,
+            registry=request.app.state.registry_manager,
+            cache=request.app.state.doc_cache,
+            github_provider=request.app.state.github_provider,
+            website_provider=request.app.state.website_provider,
             frameworks=context_req.frameworks,
             task_description=context_req.task_description
         )
@@ -617,7 +621,7 @@ async def get_cache_stats(
 ):
     """Get cache statistics"""
     try:
-        stats = await updates.get_cache_statistics_impl(cache=doc_cache)
+        stats = await updates.get_cache_statistics_impl(cache=request.app.state.doc_cache)
         
         return SuccessResponse(
             data=stats,
@@ -646,10 +650,10 @@ async def refresh_cache(
             )
         
         result = await updates.refresh_framework_cache_impl(
-            registry=registry_manager,
-            cache=doc_cache,
-            github_provider=github_provider,
-            website_provider=website_provider,
+            registry=request.app.state.registry_manager,
+            cache=request.app.state.doc_cache,
+            github_provider=request.app.state.github_provider,
+            website_provider=request.app.state.website_provider,
             framework=cache_req.framework,
             force=True
         )
