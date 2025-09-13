@@ -310,6 +310,29 @@ async def debug_state(request: Request):
     except Exception as e:
         return {"debug_error": str(e), "type": str(type(e))}
 
+@app.get("/debug/frameworks-raw")
+async def debug_frameworks_raw(request: Request):
+    """Test raw framework listing for debugging"""
+    try:
+        # Test direct registry access
+        frameworks = request.app.state.registry_manager.list_frameworks()
+        
+        # Convert to dict manually to avoid serialization issues  
+        result = []
+        for f in frameworks[:3]:  # Just first 3 for testing
+            result.append({
+                "name": f.name,
+                "display_name": f.display_name,
+                "category": f.category,
+                "type": f.type,
+                "description": f.description
+            })
+            
+        return {"frameworks": result, "count": len(frameworks)}
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
+
 @app.get("/health/detailed")
 @limiter.limit("10 per minute")
 async def detailed_health(request: Request):
