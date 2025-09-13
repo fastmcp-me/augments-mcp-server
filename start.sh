@@ -33,12 +33,5 @@ except Exception as e:
 "
 fi
 
-echo "Starting web server..."
-exec gunicorn augments_mcp.web_server:app \
-    --bind 0.0.0.0:${PORT:-8080} \
-    --workers ${WORKERS:-2} \
-    --worker-class uvicorn.workers.UvicornWorker \
-    --timeout 120 \
-    --preload \
-    --access-logfile - \
-    --error-logfile -
+echo "Starting web server on port ${PORT:-8080}..."
+exec python -m augments_mcp.web_server

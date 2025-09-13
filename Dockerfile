@@ -52,11 +52,10 @@ ENV PYTHONUNBUFFERED=1 \
     LOG_LEVEL=INFO \
     HOST=0.0.0.0
 
-# Health check with better timeout handling
-HEALTHCHECK --interval=30s --timeout=15s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8080}/health || exit 1
+# Railway handles healthchecks via railway.json
+# No HEALTHCHECK needed in Dockerfile
 
-# Expose port
+# Expose port (Railway uses $PORT env var)
 EXPOSE 8080
 
 # Use startup script for better error handling
