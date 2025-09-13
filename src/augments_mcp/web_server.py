@@ -261,7 +261,7 @@ app.add_middleware(
 
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["mcp.augments.dev", "*.augments.dev", "localhost"]
+    allowed_hosts=["mcp.augments.dev", "*.augments.dev", "localhost", "*.railway.app", "*.up.railway.app"]
 )
 
 app.middleware("http")(add_request_id)
