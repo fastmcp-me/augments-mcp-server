@@ -35,6 +35,11 @@ from .tools import (
     context_enhancement,
     updates
 )
+from .middleware.request_coalescer import coalesce_endpoint, RequestCoalescer
+from .middleware.smart_limiter import SmartRateLimiter
+from .middleware.edge_cache import EdgeCacheMiddleware
+from .middleware.abuse_detector import AbuseDetector
+from .middleware.cloudflare import CloudflareProtection
 
 # Configure logging
 logger = structlog.get_logger(__name__)
@@ -80,6 +85,13 @@ registry_manager: Optional[FrameworkRegistryManager] = None
 doc_cache: Optional[DocumentationCache] = None
 github_provider: Optional[GitHubProvider] = None
 website_provider: Optional[WebsiteProvider] = None
+
+# Global middleware components
+smart_limiter: Optional[SmartRateLimiter] = None
+edge_cache: Optional[EdgeCacheMiddleware] = None
+abuse_detector: Optional[AbuseDetector] = None
+cloudflare_protection: Optional[CloudflareProtection] = None
+request_coalescer: Optional['RequestCoalescer'] = None
 
 # Rate limiting
 def get_redis_url():
@@ -164,6 +176,7 @@ async def add_request_id(request: Request, call_next):
 async def lifespan(app: FastAPI):
     """Manage application lifecycle"""
     global redis_client, registry_manager, doc_cache, github_provider, website_provider
+    global smart_limiter, edge_cache, abuse_detector, cloudflare_protection, request_coalescer
     
     logger.info("Starting Augments Web API Server")
     
@@ -216,6 +229,13 @@ async def lifespan(app: FastAPI):
         github_token = os.getenv("GITHUB_TOKEN")
         github_provider = GitHubProvider(github_token)
         website_provider = WebsiteProvider()
+        
+        # Initialize middleware components
+        smart_limiter = SmartRateLimiter(redis_client)
+        edge_cache = EdgeCacheMiddleware(redis_client)
+        abuse_detector = AbuseDetector(redis_client)
+        cloudflare_protection = CloudflareProtection()
+        request_coalescer = RequestCoalescer(ttl=10)
         
         logger.info("All components initialized successfully")
         
