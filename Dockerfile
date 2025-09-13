@@ -1,60 +1,36 @@
-# Multi-stage build for optimized production container
-FROM python:3.11-slim as builder
+# Production-ready container optimized for Railway
+FROM python:3.11-slim
 
-# Install build dependencies (minimize layer size)
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     git \
     curl \
+    ca-certificates \
     libffi-dev \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get autoremove -y \
     && apt-get clean
 
-# Install uv for faster dependency resolution
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:${PATH}"
-
-# Set working directory
-WORKDIR /app
-
-# Copy dependency files first (for Docker layer caching)
-COPY pyproject.toml uv.lock* ./
-
-# Install dependencies with uv (faster than pip)
-RUN uv sync --frozen --no-dev --no-cache
-
-# Copy source code
-COPY src/ ./src/
-COPY frameworks/ ./frameworks/
-
-# Production stage - minimal runtime image
-FROM python:3.11-slim
-
-# Install only essential runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get autoremove -y \
-    && apt-get clean
-
-# Create non-root user early
+# Create non-root user
 RUN groupadd -r -g 1000 augments && \
     useradd -r -g augments -u 1000 -m -s /bin/bash augments
 
 # Set working directory
 WORKDIR /app
 
-# Copy Python environment from builder
-COPY --from=builder --chown=augments:augments /app/.venv /app/.venv
+# Copy dependency files first (for Docker layer caching)
+COPY pyproject.toml ./
+
+# Install dependencies with pip (more reliable on Railway)
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir .
 
 # Copy application code
 COPY --chown=augments:augments src/ ./src/
 COPY --chown=augments:augments frameworks/ ./frameworks/
-COPY --chown=augments:augments pyproject.toml ./
 
 # Create cache and logs directories with proper permissions
 RUN mkdir -p /app/cache /app/logs && \
@@ -63,8 +39,7 @@ RUN mkdir -p /app/cache /app/logs && \
 # Switch to non-root user
 USER augments
 
-# Add venv to PATH
-ENV PATH="/app/.venv/bin:$PATH"
+# Set Python path
 ENV PYTHONPATH="/app/src:$PYTHONPATH"
 
 # Production environment variables
