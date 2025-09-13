@@ -5,26 +5,41 @@ description = "Augments MCP Server - A comprehensive framework documentation pro
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    # Core MCP and web framework
     "fastmcp>=0.1.0",
-    "httpx>=0.25.0",
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.25.0",
+    "gunicorn>=21.2.0",
+    
+    # HTTP and async
+    "httpx[http2]>=0.25.0",  # HTTP/2 support for better performance
+    "aiofiles>=23.0.0",
+    
+    # Data processing
     "beautifulsoup4>=4.12.0",
     "pydantic>=2.0.0",
-    "aiofiles>=23.0.0",
-    "diskcache>=5.6.0",
     "markdownify>=0.11.0",
+    
+    # Caching and storage
+    "redis[hiredis]>=5.0.0",  # hiredis for better performance
+    "diskcache>=5.6.0",
+    
+    # Configuration and logging
     "python-dotenv>=1.0.0",
     "structlog>=24.0.0",
     "rich>=13.0.0",
     "click>=8.1.0",
-    "watchdog>=3.0.0",
-    "fastapi>=0.109.0",
-    "uvicorn[standard]>=0.25.0",
-    "redis>=5.0.0",
+    
+    # Security and rate limiting
     "slowapi>=0.1.9",
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
+    
+    # Monitoring and observability
     "prometheus-client>=0.19.0",
-    "gunicorn>=21.2.0",
+    
+    # File system monitoring
+    "watchdog>=3.0.0",
 ]
 
 [project.scripts]

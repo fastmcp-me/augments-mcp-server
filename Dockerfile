@@ -1,77 +1,87 @@
-# Multi-stage build for production-ready container
+# Multi-stage build for optimized production container
 FROM python:3.11-slim as builder
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
+# Install build dependencies (minimize layer size)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     git \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    libffi-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get autoremove -y \
+    && apt-get clean
 
-# Install uv
+# Install uv for faster dependency resolution
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Set working directory
 WORKDIR /app
 
-# Copy dependency files
-COPY pyproject.toml ./
+# Copy dependency files first (for Docker layer caching)
+COPY pyproject.toml uv.lock* ./
+
+# Install dependencies with uv (faster than pip)
+RUN uv sync --frozen --no-dev --no-cache
+
+# Copy source code
 COPY src/ ./src/
 COPY frameworks/ ./frameworks/
 
-# Install dependencies with uv
-RUN uv pip install --system --no-cache -e .
-
-# Production stage
+# Production stage - minimal runtime image
 FROM python:3.11-slim
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
+# Install only essential runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get autoremove -y \
+    && apt-get clean
 
-# Install uv in production image
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:${PATH}"
-
-# Create non-root user
-RUN useradd -m -u 1000 augments
+# Create non-root user early
+RUN groupadd -r -g 1000 augments && \
+    useradd -r -g augments -u 1000 -m -s /bin/bash augments
 
 # Set working directory
 WORKDIR /app
 
-# Copy from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-COPY --from=builder /app /app
+# Copy Python environment from builder
+COPY --from=builder --chown=augments:augments /app/.venv /app/.venv
 
-# Copy configuration files
-COPY frameworks/ ./frameworks/
+# Copy application code
+COPY --chown=augments:augments src/ ./src/
+COPY --chown=augments:augments frameworks/ ./frameworks/
+COPY --chown=augments:augments pyproject.toml ./
 
-# Create cache directory with proper permissions
-RUN mkdir -p /app/cache && chown -R augments:augments /app
-
-# Copy uv to augments user
-RUN cp -r /root/.cargo /home/augments/.cargo && \
-    chown -R augments:augments /home/augments/.cargo
+# Create cache and logs directories with proper permissions
+RUN mkdir -p /app/cache /app/logs && \
+    chown -R augments:augments /app
 
 # Switch to non-root user
 USER augments
-ENV PATH="/home/augments/.cargo/bin:${PATH}"
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV ENV=production
-ENV AUGMENTS_CACHE_DIR=/app/cache
+# Add venv to PATH
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app/src:$PYTHONPATH"
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# Production environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    ENV=production \
+    AUGMENTS_CACHE_DIR=/app/cache \
+    REDIS_POOL_SIZE=20 \
+    WORKERS=6 \
+    LOG_LEVEL=INFO
+
+# Health check with better timeout handling
+HEALTHCHECK --interval=30s --timeout=15s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8080}/health || exit 1
 
-# Expose port (Railway sets PORT env var)
+# Expose port
 EXPOSE ${PORT:-8080}
 
-# Run the web server with uv
-CMD ["uv", "run", "python", "-m", "augments_mcp.web_server"]
+# Use exec form for proper signal handling
+CMD ["python", "-m", "augments_mcp.web_server"]

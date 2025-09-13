@@ -273,13 +273,101 @@ async def metrics():
     """Prometheus metrics endpoint"""
     return generate_latest()
 
+# New monitoring endpoints
+@app.get("/api/v1/admin/protection-stats")
+async def get_protection_stats(
+    request: Request,
+    api_tier: dict = Depends(get_api_tier)
+):
+    """Get protection and abuse statistics (admin only)"""
+    # Only premium users can access admin stats
+    if api_tier.get("tier") not in ["premium"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    try:
+        stats = {}
+        
+        # Smart rate limiting stats
+        if smart_limiter:
+            stats["rate_limiting"] = await smart_limiter.get_stats() if hasattr(smart_limiter, 'get_stats') else {}
+        
+        # Edge cache stats
+        if edge_cache:
+            stats["edge_cache"] = await edge_cache.get_cache_stats()
+        
+        # CloudFlare protection stats
+        if cloudflare_protection:
+            stats["cloudflare"] = await cloudflare_protection.get_protection_stats(redis_client)
+        
+        # Request coalescing stats
+        if request_coalescer:
+            stats["coalescing"] = request_coalescer.get_stats()
+        
+        # Global coalescing stats
+        from .middleware.request_coalescer import global_coalescer
+        stats["global_coalescing"] = global_coalescer.get_stats()
+        
+        # Abuse detection stats
+        if abuse_detector:
+            stats["abuse_detection"] = await abuse_detector.get_abuse_stats()
+        
+        return {
+            "success": True,
+            "data": stats,
+            "request_id": request.state.request_id
+        }
+        
+    except Exception as e:
+        logger.error("Error getting protection stats", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@app.post("/api/v1/admin/clear-cache")
+async def clear_cache(
+    request: Request,
+    pattern: Optional[str] = None,
+    api_tier: dict = Depends(get_api_tier)
+):
+    """Clear edge cache (admin only)"""
+    if api_tier.get("tier") not in ["premium"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    try:
+        cleared = 0
+        if edge_cache:
+            cleared = await edge_cache.clear_cache(pattern)
+        
+        return {
+            "success": True,
+            "data": {
+                "cleared_entries": cleared,
+                "pattern": pattern or "all"
+            },
+            "request_id": request.state.request_id
+        }
+        
+    except Exception as e:
+        logger.error("Error clearing cache", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
 # API endpoints
 @app.get("/api/v1/frameworks", response_model=SuccessResponse)
-@limiter.limit("30 per minute")
+@coalesce_endpoint(key_prefix="list_frameworks", key_params=["category"])
 async def list_frameworks(
     request: Request,
     category: Optional[str] = None,
-    api_key: dict = Depends(verify_api_key)
+    api_tier: dict = Depends(get_api_tier)
 ):
     """List available frameworks"""
     try:
@@ -300,11 +388,11 @@ async def list_frameworks(
         )
 
 @app.get("/api/v1/frameworks/{framework}", response_model=SuccessResponse)
-@limiter.limit("30 per minute")
+@coalesce_endpoint(key_prefix="framework_info", key_params=["framework"])
 async def get_framework_info(
     request: Request,
     framework: str,
-    api_key: dict = Depends(verify_api_key)
+    api_tier: dict = Depends(get_api_tier)
 ):
     """Get detailed framework information"""
     try:
@@ -325,11 +413,10 @@ async def get_framework_info(
         )
 
 @app.post("/api/v1/frameworks/search", response_model=SuccessResponse)
-@limiter.limit("20 per minute")
 async def search_frameworks(
     request: Request,
     search_req: SearchRequest,
-    api_key: dict = Depends(verify_api_key)
+    api_tier: dict = Depends(get_api_tier)
 ):
     """Search frameworks"""
     try:
@@ -350,11 +437,11 @@ async def search_frameworks(
         )
 
 @app.post("/api/v1/documentation", response_model=SuccessResponse)
-@limiter.limit("20 per minute")
+@coalesce_endpoint(key_prefix="get_docs", key_params=["framework", "section"])
 async def get_documentation(
     request: Request,
     doc_req: FrameworkRequest,
-    api_key: dict = Depends(verify_api_key)
+    api_tier: dict = Depends(get_api_tier)
 ):
     """Get framework documentation"""
     try:
@@ -385,11 +472,10 @@ async def get_documentation(
         )
 
 @app.post("/api/v1/documentation/search", response_model=SuccessResponse)
-@limiter.limit("20 per minute")
 async def search_documentation(
     request: Request,
     search_req: SearchRequest,
-    api_key: dict = Depends(verify_api_key)
+    api_tier: dict = Depends(get_api_tier)
 ):
     """Search within framework documentation"""
     try:
@@ -418,11 +504,10 @@ async def search_documentation(
         )
 
 @app.post("/api/v1/context", response_model=SuccessResponse)
-@limiter.limit("10 per minute")
 async def get_framework_context(
     request: Request,
     context_req: MultiFrameworkRequest,
-    api_key: dict = Depends(verify_api_key)
+    api_tier: dict = Depends(get_api_tier)
 ):
     """Get multi-framework context"""
     try:
@@ -447,11 +532,10 @@ async def get_framework_context(
         )
 
 @app.post("/api/v1/analyze", response_model=SuccessResponse)
-@limiter.limit("10 per minute")
 async def analyze_code(
     request: Request,
     analysis_req: CodeAnalysisRequest,
-    api_key: dict = Depends(verify_api_key)
+    api_tier: dict = Depends(get_api_tier)
 ):
     """Analyze code for framework compatibility"""
     try:
@@ -480,10 +564,9 @@ async def analyze_code(
         )
 
 @app.get("/api/v1/cache/stats", response_model=SuccessResponse)
-@limiter.limit("10 per minute")
 async def get_cache_stats(
     request: Request,
-    api_key: dict = Depends(verify_api_key)
+    api_tier: dict = Depends(get_api_tier)
 ):
     """Get cache statistics"""
     try:
@@ -501,19 +584,18 @@ async def get_cache_stats(
         )
 
 @app.post("/api/v1/cache/refresh", response_model=SuccessResponse)
-@limiter.limit("5 per hour")
 async def refresh_cache(
     request: Request,
     cache_req: FrameworkRequest,
-    api_key: dict = Depends(verify_api_key)
+    api_tier: dict = Depends(get_api_tier)
 ):
     """Refresh framework cache (requires premium tier)"""
     try:
         # Only allow premium users to force refresh
-        if api_key.get("tier") != "premium":
+        if api_tier.get("tier") not in ["premium"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cache refresh requires premium API key"
+                detail="Cache refresh requires premium access"
             )
         
         result = await updates.refresh_framework_cache_impl(

@@ -2,35 +2,77 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile"
+    "dockerfilePath": "Dockerfile",
+    "buildCommand": null
   },
   "deploy": {
-    "numReplicas": 1,
-    "startCommand": "uv run python -m augments_mcp.web_server",
+    "numReplicas": 2,
+    "startCommand": "python -m augments_mcp.web_server",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3,
     "healthcheckPath": "/health",
-    "healthcheckTimeout": 10
+    "healthcheckTimeout": 15,
+    "sleepCommand": null,
+    "cronSchedule": null
   },
   "services": [
     {
       "name": "augments-mcp-api",
       "source": {
-        "repo": "https://github.com/yourusername/augments-mcp-server"
+        "repo": "https://github.com/augmnt/augments-mcp-server"
       },
       "builder": "DOCKERFILE",
       "domains": [
         {
-          "domain": "mcp.augments.dev"
+          "domain": "mcp.augments.dev",
+          "enableCloudflare": true
         }
       ],
       "envVars": {
         "ENV": "production",
-        "WORKERS": 4,
+        "WORKERS": 6,
         "LOG_LEVEL": "INFO",
-        "CACHE_TTL": 3600,
-        "AUGMENTS_CACHE_DIR": "/app/cache"
+        "CACHE_TTL": "600",
+        "AUGMENTS_CACHE_DIR": "/app/cache",
+        "REDIS_POOL_SIZE": "20",
+        "ENFORCE_CLOUDFLARE": "true",
+        "ENABLE_CLOUDFLARE_PROTECTION": "true",
+        "ABUSE_SENSITIVITY": "medium",
+        "GITHUB_TOKEN": "${{GITHUB_TOKEN}}",
+        "MASTER_API_KEY": "${{MASTER_API_KEY}}",
+        "REDIS_URL": "${{REDIS_URL}}"
+      },
+      "scaling": {
+        "minReplicas": 1,
+        "maxReplicas": 4,
+        "targetCPU": 70,
+        "targetMemory": 80
+      },
+      "resources": {
+        "memoryLimit": "2Gi",
+        "cpuLimit": "2000m"
       }
+    },
+    {
+      "name": "redis",
+      "image": "redis:7-alpine",
+      "volumes": [
+        {
+          "mountPath": "/data",
+          "name": "redis-data"
+        }
+      ],
+      "envVars": {
+        "REDIS_MAXMEMORY": "512mb",
+        "REDIS_MAXMEMORY_POLICY": "allkeys-lru"
+      },
+      "command": [
+        "redis-server",
+        "--maxmemory", "$REDIS_MAXMEMORY",
+        "--maxmemory-policy", "$REDIS_MAXMEMORY_POLICY",
+        "--appendonly", "yes",
+        "--save", "60", "1000"
+      ]
     }
   ]
 }
