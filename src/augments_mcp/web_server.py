@@ -523,7 +523,7 @@ async def get_documentation(
     """Get framework documentation"""
     try:
         # Apply rate limit multiplier for premium users
-        if api_key.get("tier") == "premium":
+        if api_tier.get("tier") == "premium":
             # Premium users get higher limits
             pass
         
