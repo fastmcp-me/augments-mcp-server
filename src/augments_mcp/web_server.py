@@ -310,61 +310,6 @@ async def debug_state(request: Request):
     except Exception as e:
         return {"debug_error": str(e), "type": str(type(e))}
 
-@app.get("/debug/frameworks-raw")
-async def debug_frameworks_raw(request: Request):
-    """Test raw framework listing for debugging"""
-    try:
-        # Test direct registry access
-        frameworks = request.app.state.registry_manager.list_frameworks()
-        
-        # Convert to dict manually to avoid serialization issues  
-        result = []
-        for f in frameworks[:3]:  # Just first 3 for testing
-            result.append({
-                "name": f.name,
-                "display_name": f.display_name,
-                "category": f.category,
-                "type": f.type,
-                "description": f.description
-            })
-            
-        return {"frameworks": result, "count": len(frameworks)}
-    except Exception as e:
-        import traceback
-        return {"error": str(e), "traceback": traceback.format_exc()}
-
-@app.get("/debug/frameworks-discovery")
-async def debug_frameworks_discovery(request: Request):
-    """Test the framework discovery function directly"""
-    try:
-        from .tools.framework_discovery import list_available_frameworks
-        frameworks = await list_available_frameworks(
-            registry=request.app.state.registry_manager,
-            category=None
-        )
-        
-        return {"frameworks": frameworks[:3], "count": len(frameworks), "type": str(type(frameworks))}
-    except Exception as e:
-        import traceback
-        return {"error": str(e), "traceback": traceback.format_exc()}
-
-@app.get("/debug/frameworks-full")
-async def debug_frameworks_full(request: Request, category: Optional[str] = None):
-    """Test the complete endpoint logic without decorators"""
-    try:
-        from .tools.framework_discovery import list_available_frameworks
-        frameworks = await list_available_frameworks(
-            registry=request.app.state.registry_manager,
-            category=category
-        )
-        
-        return SuccessResponse(
-            data={"frameworks": frameworks},
-            request_id=getattr(request.state, 'request_id', 'debug')
-        )
-    except Exception as e:
-        import traceback
-        return {"error": str(e), "traceback": traceback.format_exc()}
 
 @app.get("/health/detailed")
 @limiter.limit("10 per minute")
@@ -520,7 +465,7 @@ async def list_frameworks(
         )
 
 @app.get("/api/v1/frameworks/{framework}", response_model=SuccessResponse)
-@coalesce_endpoint(key_prefix="framework_info", key_params=["framework"])
+# @coalesce_endpoint(key_prefix="framework_info", key_params=["framework"])  # Disable for now
 async def get_framework_info(
     request: Request,
     framework: str,
@@ -569,7 +514,7 @@ async def search_frameworks(
         )
 
 @app.post("/api/v1/documentation", response_model=SuccessResponse)
-@coalesce_endpoint(key_prefix="get_docs", key_params=["framework", "section"])
+# @coalesce_endpoint(key_prefix="get_docs", key_params=["framework", "section"])  # Disable for now
 async def get_documentation(
     request: Request,
     doc_req: FrameworkRequest,
