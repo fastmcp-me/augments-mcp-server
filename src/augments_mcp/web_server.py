@@ -119,6 +119,23 @@ async def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")):
         detail="Invalid API key"
     )
 
+async def get_api_tier(x_api_key: Optional[str] = Header(None, alias="X-API-Key")) -> dict:
+    """Get API tier for request - allows public access"""
+    # No API key = public tier
+    if not x_api_key:
+        return {"tier": "public", "rate_limit_multiplier": 1}
+    
+    # Master API key = premium tier
+    if MASTER_API_KEY and x_api_key == MASTER_API_KEY:
+        return {"tier": "premium", "rate_limit_multiplier": 10}
+    
+    # Demo keys = demo tier
+    if x_api_key.startswith("demo_"):
+        return {"tier": "demo", "rate_limit_multiplier": 3}
+    
+    # Invalid API key still gets public access (frictionless)
+    return {"tier": "public", "rate_limit_multiplier": 1}
+
 # Request ID middleware
 async def add_request_id(request: Request, call_next):
     """Add unique request ID to each request"""
