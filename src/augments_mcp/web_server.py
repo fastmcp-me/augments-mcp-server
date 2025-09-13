@@ -221,7 +221,6 @@ async def lifespan(app: FastAPI):
         await registry_manager.initialize()
         
         doc_cache = DocumentationCache(cache_dir=cache_dir)
-        await doc_cache.initialize()
         
         github_token = os.getenv("GITHUB_TOKEN")
         github_provider = GitHubProvider(github_token)
@@ -242,9 +241,7 @@ async def lifespan(app: FastAPI):
         # Cleanup
         logger.info("Shutting down Augments Web API Server")
         if redis_client:
-            await redis_client.close()
-        if doc_cache:
-            await doc_cache.close()
+            await redis_client.aclose()
 
 # Create FastAPI app
 app = FastAPI(
