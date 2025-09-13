@@ -538,7 +538,7 @@ async def get_documentation(
         )
         
         return SuccessResponse(
-            data=docs,
+            data={"documentation": docs},
             request_id=request.state.request_id
         )
     except Exception as e:
