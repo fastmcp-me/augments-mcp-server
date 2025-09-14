@@ -6,30 +6,19 @@ This module provides a clean entry point that avoids the RuntimeWarning
 about module imports when using python -m execution.
 """
 
+# Apply warning filters IMMEDIATELY - before any other imports
 import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="websockets.*")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="uvicorn.*")
+# Also catch the specific warnings by message
+warnings.filterwarnings("ignore", message=".*websockets.legacy is deprecated.*")
+warnings.filterwarnings("ignore", message=".*WebSocketServerProtocol is deprecated.*")
+
 import sys
-
-
-def suppress_deprecation_warnings():
-    """Suppress known deprecation warnings from dependencies."""
-    # Filter out websockets deprecation warnings
-    warnings.filterwarnings(
-        "ignore", 
-        category=DeprecationWarning, 
-        module="websockets.*"
-    )
-    warnings.filterwarnings(
-        "ignore",
-        category=DeprecationWarning,
-        module="uvicorn.*"
-    )
 
 
 def main():
     """Main entry point for the server."""
-    # Suppress deprecation warnings early
-    suppress_deprecation_warnings()
-    
     # Import after warnings are configured
     from .server import main as server_main
     

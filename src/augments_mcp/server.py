@@ -5,13 +5,15 @@ A comprehensive MCP server that provides real-time access to framework documenta
 and context to enhance Claude Code's ability to generate accurate, up-to-date code.
 """
 
-import os
-import asyncio
+# Suppress deprecation warnings BEFORE any other imports
 import warnings
-
-# Suppress known deprecation warnings from dependencies
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="websockets.*")
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="uvicorn.*")
+warnings.filterwarnings("ignore", message=".*websockets.legacy is deprecated.*")
+warnings.filterwarnings("ignore", message=".*WebSocketServerProtocol is deprecated.*")
+
+import os
+import asyncio
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
 import sys
