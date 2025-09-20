@@ -27,7 +27,12 @@ class WebsiteProvider(BaseProvider):
                 headers={
                     'User-Agent': 'Augments-MCP-Server/1.0 (Documentation Fetcher)'
                 },
-                follow_redirects=True
+                follow_redirects=True,
+                limits=httpx.Limits(
+                    max_keepalive_connections=3,
+                    max_connections=5,
+                    keepalive_expiry=5.0
+                )
             )
         return self._client
 

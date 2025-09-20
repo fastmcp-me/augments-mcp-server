@@ -7,7 +7,9 @@ and context to enhance Claude Code's ability to generate accurate, up-to-date co
 
 import os
 import asyncio
-from typing import List, Dict, Any, Optional
+import signal
+import threading
+from typing import List, Dict, Any, Optional, Set
 
 # Monkey patch uvicorn to use wsproto by default
 # This is needed because FastMCP doesn't expose uvicorn websocket configuration
@@ -87,6 +89,33 @@ doc_cache: Optional[DocumentationCache] = None
 github_provider: Optional[GitHubProvider] = None
 website_provider: Optional[WebsiteProvider] = None
 
+# Global state tracking
+background_tasks: Set[asyncio.Task] = set()
+shutdown_event = threading.Event()
+shutdown_in_progress = False
+
+def _setup_signal_handlers():
+    """Setup signal handlers to prevent shutdown loops."""
+    def signal_handler(signum, frame):
+        global shutdown_in_progress
+        if shutdown_in_progress:
+            logger.warning("Shutdown already in progress, ignoring signal", signal=signum)
+            return
+        
+        shutdown_in_progress = True
+        shutdown_event.set()
+        logger.info("Shutdown signal received", signal=signum)
+    
+    # Only setup signal handlers in main thread and on Unix systems
+    if threading.current_thread() is threading.main_thread():
+        try:
+            signal.signal(signal.SIGTERM, signal_handler)
+            signal.signal(signal.SIGINT, signal_handler)
+            logger.debug("Signal handlers installed")
+        except (OSError, ValueError) as e:
+            logger.warning("Could not install signal handlers", error=str(e))
+
+
 def _ensure_initialized() -> tuple[FrameworkRegistryManager, DocumentationCache, GitHubProvider, WebsiteProvider]:
     """Ensure all global components are initialized and return them."""
     if registry_manager is None:
@@ -110,41 +139,56 @@ async def _auto_cache_popular_frameworks(
     """Auto-cache popular frameworks in the background."""
     logger.info("Starting auto-cache of popular frameworks", frameworks=frameworks)
     
-    for framework in frameworks:
-        try:
-            # Check if already cached
-            cached_content = await cache.get(framework, "", "docs")
-            if cached_content:
-                logger.debug("Framework already cached, skipping", framework=framework)
-                continue
-            
-            logger.info("Auto-caching framework", framework=framework)
-            
-            # Cache main documentation
-            await get_framework_docs_impl(
-                registry=registry,
-                cache=cache,
-                github_provider=github_provider,
-                website_provider=website_provider,
-                framework=framework,
-                section=None,
-                use_cache=True,
-                ctx=None
-            )
-            
-            logger.info("Framework auto-cached successfully", framework=framework)
-            
-        except Exception as e:
-            logger.warning("Failed to auto-cache framework", 
-                          framework=framework, error=str(e))
-    
-    logger.info("Auto-cache of popular frameworks completed")
+    try:
+        for framework in frameworks:
+            # Check for shutdown signal
+            if shutdown_event.is_set():
+                logger.info("Shutdown requested, stopping auto-cache")
+                return
+                
+            try:
+                # Check if already cached
+                cached_content = await cache.get(framework, "", "docs")
+                if cached_content:
+                    logger.debug("Framework already cached, skipping", framework=framework)
+                    continue
+                
+                logger.info("Auto-caching framework", framework=framework)
+                
+                # Cache main documentation
+                await get_framework_docs_impl(
+                    registry=registry,
+                    cache=cache,
+                    github_provider=github_provider,
+                    website_provider=website_provider,
+                    framework=framework,
+                    section=None,
+                    use_cache=True,
+                    ctx=None
+                )
+                
+                logger.info("Framework auto-cached successfully", framework=framework)
+                
+            except asyncio.CancelledError:
+                logger.info("Auto-cache task cancelled", framework=framework)
+                return
+            except Exception as e:
+                logger.warning("Failed to auto-cache framework", 
+                              framework=framework, error=str(e))
+        
+        logger.info("Auto-cache of popular frameworks completed")
+    except asyncio.CancelledError:
+        logger.info("Auto-cache task cancelled during shutdown")
+        raise
 
 
 @asynccontextmanager
 async def app_lifespan(server: FastMCP):
     """Manage application lifecycle with framework registry and cache initialization."""
-    global registry_manager, doc_cache, github_provider, website_provider
+    global registry_manager, doc_cache, github_provider, website_provider, shutdown_in_progress
+    
+    # Setup signal handlers
+    _setup_signal_handlers()
     
     logger.info("Initializing Augments MCP Server")
     
@@ -170,9 +214,13 @@ async def app_lifespan(server: FastMCP):
         
         # Auto-cache popular frameworks in background
         popular_frameworks = ["nextjs", "react", "tailwindcss", "typescript", "shadcn-ui"]
-        asyncio.create_task(_auto_cache_popular_frameworks(
+        cache_task = asyncio.create_task(_auto_cache_popular_frameworks(
             popular_frameworks, registry_manager, doc_cache, github_provider, website_provider
         ))
+        background_tasks.add(cache_task)
+        
+        # Remove task from set when it completes
+        cache_task.add_done_callback(background_tasks.discard)
         
         logger.info("Augments MCP Server initialized successfully", 
                    frameworks=registry_manager.get_framework_count())
@@ -194,25 +242,57 @@ async def app_lifespan(server: FastMCP):
         raise
         
     finally:
+        # Prevent multiple shutdown attempts
+        if shutdown_in_progress:
+            logger.debug("Shutdown already in progress, skipping cleanup")
+            return
+        shutdown_in_progress = True
+        
         # Cleanup
         logger.info("Shutting down Augments MCP Server")
         
+        # Cancel all background tasks
+        if background_tasks:
+            logger.info("Cancelling background tasks", task_count=len(background_tasks))
+            for task in background_tasks:
+                if not task.done():
+                    task.cancel()
+            
+            # Wait for tasks to complete cancellation
+            if background_tasks:
+                try:
+                    await asyncio.gather(*background_tasks, return_exceptions=True)
+                except Exception as e:
+                    logger.warning("Error while cancelling background tasks", error=str(e))
+        
+        # Shutdown components
         if registry_manager:
-            await registry_manager.shutdown()
+            try:
+                await registry_manager.shutdown()
+            except Exception as e:
+                logger.warning("Error shutting down registry manager", error=str(e))
         
         if github_provider:
-            await github_provider.close()
+            try:
+                await github_provider.close()
+            except Exception as e:
+                logger.warning("Error closing github provider", error=str(e))
         
         if website_provider:
-            await website_provider.close()
+            try:
+                await website_provider.close()
+            except Exception as e:
+                logger.warning("Error closing website provider", error=str(e))
+        
+        logger.info("Augments MCP Server shutdown complete")
 
 
 # Initialize FastMCP server with web deployment configuration
 mcp = FastMCP(
     "augments-mcp-server", 
     lifespan=app_lifespan,
-    host="0.0.0.0",  # Bind to all interfaces for Railway
-    port=8080,       # Match Railway configuration
+    host=os.getenv("HOST", "0.0.0.0"),  # Bind to all interfaces for Railway
+    port=int(os.getenv("PORT", "8080")), # Match Railway configuration
 )
 
 

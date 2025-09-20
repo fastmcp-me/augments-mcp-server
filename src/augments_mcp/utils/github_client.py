@@ -48,7 +48,11 @@ class GitHubClient:
         self.client = httpx.AsyncClient(
             headers=headers,
             timeout=30.0,
-            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
+            limits=httpx.Limits(
+                max_keepalive_connections=3,
+                max_connections=5,
+                keepalive_expiry=5.0
+            )
         )
     
     async def __aenter__(self):
